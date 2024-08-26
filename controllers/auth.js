@@ -1,6 +1,7 @@
 const { response } = require('express')
 const bcrypt = require('bcryptjs')
 const Usuario = require('../models/Usuario')
+const { generarJWT } = require('../helpers/jwt')
 
 const crearUsuario = async (req, res = response) => {
 
@@ -25,14 +26,18 @@ const crearUsuario = async (req, res = response) => {
 
         await usuario.save()
 
+        // Generar JWT
+        const token = await generarJWT(usuario.id, usuario.name)
+
         res.status(201).json({
             ok: true,
             uid: usuario.id,
-            name: usuario.name
+            name: usuario.name,
+            token
         })
 
-    } catch (err) {
-        console.log(err)
+    } catch (error) {
+        console.log(error)
         res.status(500).json({
             ok: false,
             msg: 'Por favor hable con el administrador'
@@ -41,24 +46,61 @@ const crearUsuario = async (req, res = response) => {
 
 }
 
-const loginUsuario = (req, res = response) => {
+const loginUsuario = async (req, res = response) => {
 
     const { email, password } = (req.body)
 
-    res.status(201).json({
-        ok: true,
-        msg: 'login',
-        email,
-        password
-    })
+    try {
 
+        const usuario = await Usuario.findOne({ email })
+
+        if( !usuario ) {
+            return res.status(400).json({
+                ok: false,
+                msg: 'Credenciales incorrectas'
+            })
+        }
+
+        // Confirmar los passwords
+        const validPassword = bcrypt.compareSync( password, usuario.password )
+
+        if ( !validPassword ) {
+            return res.status(400).json({
+                ok: false,
+                msg: 'Contraseña incorrecta'
+            })
+        }
+
+        // Generar nuestro JWT
+        const token = await generarJWT(usuario.id, usuario.name)
+
+        
+        res.json({
+            ok: true,
+            uid: usuario.id,
+            name: usuario.name,
+            token
+        })
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({
+            ok: false,
+            msg: 'No se ha encontrado un usuario con esas credenciales'
+        })
+    }
 }
 
-const revalidarToken = (req, res = response) => {
+const revalidarToken = async (req, res = response) => {
 
-    res.status(201).json({
+    const { uid, name } = req
+
+    // generar un nuevo JWT y retornarlo en esta peticion
+    const token = await generarJWT( uid, name)
+
+    res.json({
         ok: true,
-        msg: 'renew'
+        token
     })
 
 }
